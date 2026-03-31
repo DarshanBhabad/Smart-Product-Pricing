@@ -10,7 +10,7 @@
 |---|---|---|
 | Baseline | Multimodal NN + Dense Head | 46.1% |
 | Iteration 2 | Multimodal NN + LightGBM | ~31% |
-| **Final** | **Multimodal NN + PCA + LightGBM** | **18%** |
+| **Final** | **Multimodal NN + PCA + LightGBM** | **19.41%** |
 
 ---
 
@@ -119,7 +119,7 @@ Root cause: LightGBM was finding spurious patterns across all 2048 embedding dim
 ---
 
 ### Approach 3 — Final: NN + PCA + LightGBM (`FINAL_SPP_BOOSTING_PCA.ipynb`)
-**SMAPE: 18%** ✅
+**SMAPE: 19.41%** ✅
 
 ```
 STAGE 1 — Joint NN training (same as Approach 2)
