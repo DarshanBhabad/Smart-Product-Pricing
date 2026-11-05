@@ -28,6 +28,30 @@ This was built for the **Mavericks Amazon ML Challenge** on Kaggle.
 
 ---
 
+## ❓ But We Already Know Prices — So Why Predict?
+
+This is the most important question to answer before understanding this project.
+
+**The key insight: we know prices of existing products, but not new ones.**
+
+The model learns patterns from millions of existing listings (image + text → price) and uses that knowledge to **suggest a fair price for something it has never seen before.**
+
+> Think of it like a real estate agent — they can estimate the price of a house they've never seen before just by looking at photos and reading the description, because they've seen thousands of similar houses. This model does exactly that, but for products.
+
+### Real-World Use Cases This Unlocks
+
+| Use Case | How the Model Helps |
+|---|---|
+| 🆕 New seller listing a product | No historical price exists → model suggests a fair price range |
+| 🚨 Fraud / anomaly detection | Seller lists "iPhone 15 Pro" at ₹500 → model predicts ₹80,000 → flag it |
+| 🔄 Dynamic repricing | Seller updates image/description → model re-evaluates fair price |
+| 🗂️ Catalog quality control | Predicted vs listed price diverges wildly → wrong category, fake image, or misleading text |
+| 📊 New product launch | No market data yet → model estimates based on visual/textual similarity to existing products |
+
+So the training data (known prices) is just the **teacher**. The deployed model serves people dealing with **unknown prices** — which is the actual business problem.
+
+---
+
 ## 📁 Repository Structure
 
 ```
