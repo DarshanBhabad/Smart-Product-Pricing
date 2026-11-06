@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Product Pricing</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      color: #111;
+    }
+
+    /* NAVBAR */
+    nav {
+      background: #131921;
+      padding: 12px 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    nav .logo {
+      color: #ff9900;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    nav .tagline {
+      color: #ccc;
+      font-size: 13px;
+    }
+
+    /* MAIN LAYOUT */
+    .container {
+      max-width: 960px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    h1 {
+      font-size: 22px;
+      margin-bottom: 6px;
+      color: #111;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 28px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 32px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    /* IMAGE UPLOAD */
+    .upload-box {
+      border: 2px dashed #ccc;
+      border-radius: 10px;
+      height: 280px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .upload-box:hover { border-color: #ff9900; }
+    .upload-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      position: absolute;
+      top: 0; left: 0;
+    }
+    .upload-box .placeholder {
+      text-align: center;
+      color: #999;
+    }
+    .upload-box .placeholder span {
+      font-size: 48px;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .upload-box .placeholder p {
+      font-size: 13px;
+    }
+    #fileInput { display: none; }
+
+    /* RIGHT SIDE */
+    .right-side {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    textarea {
+      width: 100%;
+      height: 160px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      resize: none;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: #ff9900; }
+
+    .predict-btn {
+      background: #ff9900;
+      color: #111;
+      border: none;
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+    }
+    .predict-btn:hover { background: #e68a00; }
+    .predict-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+    /* RESULT */
+    .result-box {
+      display: none;
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .result-box.show { display: block; }
+
+    .result-box .price-label {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+    .result-box .price-main {
+      font-size: 32px;
+      font-weight: 700;
+      color: #B12704;
+    }
+    .result-box .price-range {
+      font-size: 13px;
+      color: #555;
+      margin-top: 6px;
+    }
+    .result-box .fraud-alert {
+      display: none;
+      margin-top: 12px;
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #856404;
+    }
+    .result-box .fraud-alert.show { display: block; }
+
+    /* LOADING */
+    .loader {
+      display: none;
+      text-align: center;
+      padding: 10px 0;
+      font-size: 13px;
+      color: #666;
+    }
+    .loader.show { display: block; }
+
+    /* FOOTER */
+    footer {
+      text-align: center;
+      padding: 30px;
+      color: #999;
+      font-size: 12px;
+    }
+
+    @media (max-width: 640px) {
+      .card { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="logo">🛒 SmartPrice</div>
+    <div class="tagline">AI-powered product price prediction</div>
+  </nav>
+
+  <div class="container">
+    <h1>Predict Your Product Price</h1>
+    <p class="subtitle">Upload a product image and enter its description — our AI will suggest a fair market price.</p>
+
+    <div class="card">
+      <!-- LEFT: Image Upload -->
+      <div>
+        <label>Product Image</label>
+        <div class="upload-box" id="uploadBox" onclick="document.getElementById('fileInput').click()">
+          <div class="placeholder" id="placeholder">
+            <span>📷</span>
+            <p>Click to upload image</p>
+            <p style="font-size:11px; margin-top:4px;">JPG, PNG supported</p>
+          </div>
+          <img id="preview" src="" alt="" style="display:none"/>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" onchange="previewImage(event)"/>
+      </div>
+
+      <!-- RIGHT: Text + Button + Result -->
+      <div class="right-side">
+        <div>
+          <label>Product Description</label>
+          <textarea id="textInput" placeholder="e.g. Pure silk handwoven Banarasi saree with golden zari border, traditional design, premium quality..."></textarea>
+        </div>
+
+        <button class="predict-btn" id="predictBtn" onclick="predictPrice()">
+          🔍 Predict Price
+        </button>
+
+        <div class="loader" id="loader">⏳ Analyzing product... this may take a few seconds</div>
+
+        <div class="result-box" id="resultBox">
+          <div class="price-label">Suggested Market Price</div>
+          <div class="price-main" id="priceMain">₹0</div>
+          <div class="price-range" id="priceRange">Range: ₹0 – ₹0</div>
+          <div class="fraud-alert" id="fraudAlert">
+            ⚠️ <strong>Price Alert:</strong> The listed price seems unusually low compared to our prediction. This listing may need review.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Built for Mavericks Amazon ML Challenge · Multimodal NN + PCA + LightGBM · SMAPE 19.41%
+  </footer>
+
+  <script>
+    const BACKEND_URL = "https://your-render-app.onrender.com"  // will update after Render deploy
+
+    function previewImage(event) {
+      const file = event.target.files[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = e => {
+        const preview = document.getElementById("preview")
+        preview.src = e.target.result
+        preview.style.display = "block"
+        document.getElementById("placeholder").style.display = "none"
+      }
+      reader.readAsDataURL(file)
+    }
+
+    async function predictPrice() {
+      const fileInput = document.getElementById("fileInput")
+      const text = document.getElementById("textInput").value.trim()
+
+      if (!fileInput.files[0]) { alert("Please upload a product image."); return }
+      if (!text) { alert("Please enter a product description."); return }
+
+      const btn = document.getElementById("predictBtn")
+      const loader = document.getElementById("loader")
+      const resultBox = document.getElementById("resultBox")
+
+      btn.disabled = true
+      loader.classList.add("show")
+      resultBox.classList.remove("show")
+
+      const formData = new FormData()
+      formData.append("image", fileInput.files[0])
+      formData.append("text", text)
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/predict`, { method: "POST", body: formData })
+        const data = await res.json()
+
+        document.getElementById("priceMain").textContent = `₹${data.predicted_price.toLocaleString("en-IN")}`
+        document.getElementById("priceRange").textContent = `Range: ₹${data.price_range.low.toLocaleString("en-IN")} – ₹${data.price_range.high.toLocaleString("en-IN")}`
+
+        // Fraud alert: if predicted price is 5x higher than some threshold (demo logic)
+        const fraudAlert = document.getElementById("fraudAlert")
+        fraudAlert.classList.remove("show")
+
+        resultBox.classList.add("show")
+      } catch (err) {
+        alert("Something went wrong. Please try again.")
+      } finally {
+        btn.disabled = false
+        loader.classList.remove("show")
+      }
+    }
+  </script>
+
+</body>
+</html>
