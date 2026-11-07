@@ -1,3 +1,11 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:6636a2d3b8b30f96052514b08d1035fc7b83a4a50ad316013aa8e681a4c9f650
-size 108
+fastapi
+uvicorn
+torch
+timm
+transformers
+lightgbm
+scikit-learn
+numpy
+pillow
+python-multipart
+huggingface_hub
