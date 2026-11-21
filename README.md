@@ -4,6 +4,18 @@
 
 ---
 
+## 🖥️ Live Demo Screenshots
+
+**Prediction 1 — Rani 14-Spice Mango Chutney (10.5 oz)**
+![Mango Chutney Prediction](OUTPUTS/s1.png)
+
+**Prediction 2 — Aleias Gluten Free Italian Breadcrumbs (Pack of 12)**
+![Breadcrumbs Prediction](OUTPUTS/Screenshot%202026-11-21%20153021.png)
+
+Both predictions running live on EC2 (`16.16.26.32:8000`) — full multimodal inference (DistilBERT + EfficientNet + PCA + LightGBM) completing in under 3 seconds on CPU.
+
+---
+
 ## 📊 Results Summary
 
 | Approach | Architecture | SMAPE |
@@ -282,6 +294,179 @@ model.eval()
 | 📦 Dataset | [Mavericks Amazon ML Dataset](https://www.kaggle.com/datasets/bboyattitude/mavericks-amazon-ml-dataset) |
 | 📓 Kaggle Notebook | [ecommerce-using-boosting](https://www.kaggle.com/code/bboyattitude/ecommerce-using-boosting?scriptVersionId=306863797) |
 | 💻 GitHub | [DarshanBhabad](https://github.com/DarshanBhabad) |
+
+---
+
+## 🚀 Deployment
+
+### Infrastructure — AWS EC2
+
+The app runs on an **AWS EC2 m7i-flex.large** instance (8 GB RAM, 2 vCPU) on Amazon Linux 2023.
+
+**Why m7i-flex.large:**
+The model stack at inference time loads DistilBERT (~250 MB), EfficientNet-B0 (~20 MB), PyTorch and all dependencies (~400 MB), and the OS/Python process (~200 MB) — totalling under 1 GB RAM. The t3.micro (1 GB RAM) couldn't hold this stack at startup and threw an out-of-memory error. The m7i-flex.large gives 8 GB RAM with 7+ GB headroom, which keeps inference stable.
+
+**Storage — Separate EBS Volume:**
+The root volume (8 GB) is left for the OS only. A separate 20 GB EBS gp3 volume is attached and mounted at `/data`. Everything heavy — the Python venv, PyTorch (~700 MB), all pip packages, and the HF model cache — lives on `/data`. This keeps the root volume from filling up and makes it easy to detach/snapshot the data volume independently.
+
+```
+/           →  8 GB root   →  Amazon Linux OS only
+/data       →  20 GB EBS   →  venv, pip packages, HF cache, app code
+```
+
+Volume UUID: `a4b6c4cd-9dd7-4238-9b40-13f9ed467c9b` (mounted via `/etc/fstab` with `nofail`)
+
+**HF model cache** is redirected from the default `~/.cache/huggingface` to `/data/hf-cache` via the `HF_HOME` environment variable so model weights (`nn_model.pt`, `pca.pkl`, `lgbm_model.txt`) download to the EBS volume on first startup.
+
+---
+
+### Why Not Hugging Face Spaces
+
+HF Spaces was the first option considered since the models are already hosted at `bboy-07/smart-product-pricing-models`. Two deployment paths were explored:
+
+**Option 1 — HF Serverless Inference API:**
+HF hosts base models like `distilbert-base-uncased` on a free serverless tier. However, the inference pipeline uses a **custom fine-tuned `nn_model.pt`** whose weights are not the base DistilBERT weights — they've been jointly trained end-to-end for price prediction. The serverless API only serves standard Hub models, not custom `.pt` files, so this path doesn't work for this pipeline.
+
+**Option 2 — HF Gradio / Docker Space:**
+A Docker Space exposing a FastAPI endpoint (with the full inference stack running on HF's free 16 GB CPU) would have worked technically. However, as of 2025, HF requires a **paid PRO plan** to create Gradio or Docker Spaces on personal accounts. Free accounts are limited to static HTML Spaces and up to 2 ZeroGPU Spaces. Neither fits this use case.
+
+Since both free HF paths were blocked, the decision was to run inference directly on EC2 with a large enough instance.
+
+---
+
+### EC2 Setup — Step by Step
+
+**Security group inbound rules:**
+
+| Port | Purpose |
+|---|---|
+| 22 | SSH access |
+| 80 | HTTP |
+| 8000 | FastAPI / uvicorn |
+
+**1. Format and mount EBS volume:**
+```bash
+sudo mkfs -t ext4 /dev/nvme1n1
+sudo mkdir /data
+sudo mount /dev/nvme1n1 /data
+sudo chown ec2-user:ec2-user /data
+```
+
+`lsblk` confirmed `nvme0n1` (8 GB) as root and `nvme1n1` (20 GB) as the attached EBS volume.
+
+**2. Auto-mount on reboot via fstab:**
+```bash
+sudo blkid /dev/nvme1n1
+# UUID="a4b6c4cd-9dd7-4238-9b40-13f9ed467c9b"
+
+echo 'UUID=a4b6c4cd-9dd7-4238-9b40-13f9ed467c9b  /data  ext4  defaults,nofail  0  2' | sudo tee -a /etc/fstab
+sudo mount -a
+```
+
+**3. System packages:**
+```bash
+sudo dnf update -y
+sudo dnf install -y python3.11 python3.11-devel python3-pip git gcc tmux
+```
+
+**4. Set HF model cache to EBS volume:**
+```bash
+echo 'export HF_HOME=/data/hf-cache' >> ~/.bashrc
+source ~/.bashrc
+mkdir -p /data/hf-cache
+```
+
+**5. Clone production branch:**
+```bash
+git clone -b production https://github.com/DarshanBhabad/Smart-Product-Pricing.git /data/smartprice
+```
+
+**6. Create venv on EBS and install dependencies:**
+```bash
+python3.11 -m venv /data/venv
+source /data/venv/bin/activate
+cd /data/smartprice/app/backend
+pip install --cache-dir /data/pip-cache -r requirements.txt
+```
+
+> **NumPy compatibility fix:** PyTorch 2.1.0 is incompatible with NumPy 2.x. pip resolves to NumPy 2.x by default on a fresh install, which causes a `RuntimeError: Numpy is not available` at inference time. Fix:
+> ```bash
+> pip install "numpy<2.0"
+> ```
+
+**7. Run the backend persistently with tmux:**
+
+The app is served by uvicorn on port 8000. tmux keeps it running after the SSH session closes.
+
+```bash
+tmux new -s smartprice
+source /data/venv/bin/activate
+cd /data/smartprice/app/backend
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+On first startup, `load_models()` downloads `nn_model.pt`, `pca.pkl`, and `lgbm_model.txt` from HF Hub into `/data/hf-cache`. Once you see:
+
+```
+Loading models...
+Models loaded!
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+Detach from tmux with `Ctrl+B` then `D` — the app keeps running in the background.
+
+**8. Frontend — served by FastAPI:**
+
+The frontend (`app/frontend/index.html`) is served as a static file directly by the FastAPI backend via:
+
+```python
+app.mount("/static", StaticFiles(directory="../frontend"), name="static")
+
+@app.get("/")
+def root():
+    return FileResponse("../frontend/index.html")
+```
+
+So there is no separate frontend server or tmux session needed. Everything is served from port 8000. The `BACKEND_URL` in `index.html` is set to `http://16.16.26.32:8000` to point API calls to the same EC2 instance.
+
+---
+
+### Useful Commands
+
+```bash
+# SSH into instance
+ssh -i smartprice-key.pem ec2-user@16.16.26.32
+
+# Re-attach to running app
+tmux attach -t smartprice
+
+# Check RAM usage
+free -h
+
+# Check disk usage
+df -h
+
+# Confirm app is listening on port 8000
+sudo ss -tlnp | grep 8000
+
+# Pull latest code and restart
+cd /data/smartprice && git pull origin production
+tmux attach -t smartprice
+# Ctrl+C to stop, then:
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+---
+
+### Disk Usage Breakdown
+
+| Path | Contents | Size |
+|---|---|---|
+| `/` | Amazon Linux OS | ~2–3 GB |
+| `/data/venv` | Python venv + all packages incl. PyTorch | ~2 GB |
+| `/data/hf-cache` | DistilBERT + model weights from HF Hub | ~500 MB |
+| `/data/smartprice` | App code (cloned from GitHub) | ~few MB |
+| `/data/pip-cache` | pip download cache (safe to delete) | ~500 MB |
 
 ---
 
